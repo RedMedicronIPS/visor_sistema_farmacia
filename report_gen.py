@@ -73,7 +73,7 @@ class ReportGenerator:
                 except Exception as e:
                     raise PermissionError(f"No se pudo eliminar el PDF anterior: {str(e)}")
     
-    def build(self, header, meds, firma_data, id_entrega):
+    def build(self, header, meds, firma_data, id_entrega, output_folder=None, is_bulk=False):
         """Genera el PDF del acta de entrega.
         
         Args:
@@ -81,6 +81,8 @@ class ReportGenerator:
             meds: Lista de medicamentos entregados
             firma_data: Datos de la firma digital del paciente
             id_entrega: Identificador único de la entrega
+            output_folder: Ruta de carpeta de salida (opcional, usa carpeta actual si es None)
+            is_bulk: Si es True, no abre automáticamente el PDF (para descarga masiva)
             
         Returns:
             str: Ruta del PDF generado
@@ -90,14 +92,17 @@ class ReportGenerator:
             PermissionError: Si el PDF de salida está abierto
             Exception: Si hay errores COM o en la conversión a PDF
         """
-        base_path = os.path.dirname(os.path.abspath(__file__))
+        base_path = output_folder if output_folder else os.path.dirname(os.path.abspath(__file__))
         template_name = "ACTA_MEDICAMENTOS.docx"
-        template_path = os.path.join(base_path, template_name)
+        template_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), template_name)
         
         if not os.path.exists(template_path):
             raise FileNotFoundError(f"No se encontró la plantilla en: {template_path}")
         
-        temp_word = os.path.join(base_path, f"temp_{id_entrega}.docx")
+        # Nombre único del PDF con timestamp para evitar conflictos
+        import time
+        timestamp = int(time.time() * 1000) % 1000000  # Micro timestamp único
+        temp_word = os.path.join(base_path, f"temp_{id_entrega}_{timestamp}.docx")
         pdf_final = os.path.join(base_path, f"Acta_Entrega_{header.IdUsuario}_{id_entrega}.pdf")
         
         try:
@@ -165,6 +170,13 @@ class ReportGenerator:
                     raise Exception(f"Error durante conversión PDF: {str(com_error)}")
             
             self._log_progress("✓ PDF generado exitosamente")
+            
+            # Abrir PDF solo si no es generación en lote
+            if not is_bulk and sys.platform == "win32":
+                try:
+                    os.startfile(pdf_final)
+                except Exception as e:
+                    self._log_progress(f"⚠ No se pudo abrir el PDF automáticamente: {str(e)}")
             
             return pdf_final
             

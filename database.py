@@ -220,3 +220,118 @@ class DataManager:
                 raise
             # Envolver otras excepciones
             raise Exception(f"Error inesperado al obtener datos: {str(e)}")
+
+    def get_sedes(self):
+        """Obtiene la lista de todas las sedes disponibles.
+        
+        Returns:
+            list: Lista de tuplas (IdSedeSI, SedeNombre).
+            
+        Raises:
+            Exception: Si hay error en la consulta.
+        """
+        query = """SELECT IdSedeSI, SedeNombre FROM RedMedicronIPS..GeneralesSede ORDER BY SedeNombre"""
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                result = cursor.execute(query).fetchall()
+                return result if result else []
+        except pyodbc.Error as e:
+            raise Exception(f"Error al obtener sedes: {str(e)}")
+
+    def get_all_entregas_by_cedula(self, id_usuario, id_sede=None):
+        """Obtiene TODAS las entregas (UNA SOLA por número de entrega) de un paciente por cédula.
+        
+        Args:
+            id_usuario (str): Número de documento del paciente.
+            id_sede (int): ID de sede para filtrar (opcional).
+            
+        Returns:
+            list: Lista de tuplas (IdAdmision, numeroEntrega, fechaEntrega, IdUsuario, nombrePaciente, SedeNombre).
+            
+        Raises:
+            Exception: Si hay error en la consulta.
+        """
+        query = """
+        SELECT
+            rn.IdAdmision,
+            rn.numeroEntrega,
+            CAST(rn.fechaEntrega AS DATE) as fechaEntrega,
+            p.IdUsuario,
+            RTRIM(p.PApellido) + ' ' + RTRIM(ISNULL(p.SApellido,'')) + ' ' + 
+            RTRIM(p.PNombre) + ' ' + RTRIM(ISNULL(p.SNombre,'')) as nombrePaciente,
+            ISNULL(s.SedeNombre, 'N/A') as SedeNombre
+        FROM (
+            SELECT 
+                d.IdAdmision,
+                d.numeroEntrega,
+                d.fechaEntrega,
+                d.idSede,
+                a.IdUsuario,
+                ROW_NUMBER() OVER (PARTITION BY d.numeroEntrega ORDER BY d.fechaEntrega DESC, d.IdAdmision DESC) as rn
+            FROM RedMedicronIPS..DispensacionFarmaciaPGP d
+            INNER JOIN SIFacturacion..mAdmisiones a ON d.IdAdmision = a.IdAdmision
+            WHERE a.IdUsuario = ? AND d.estado = 0
+        ) rn
+        INNER JOIN SIFacturacion..mPacientes p ON rn.IdUsuario = p.IdUsuario
+        LEFT JOIN RedMedicronIPS..GeneralesSede s ON rn.idSede = s.IdSedeSI
+        WHERE rn.rn = 1
+        """ + (f"AND rn.idSede = {id_sede} " if id_sede else "") + """
+        ORDER BY rn.fechaEntrega DESC
+        """
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                result = cursor.execute(query, (id_usuario,)).fetchall()
+                return result if result else []
+        except pyodbc.Error as e:
+            raise Exception(f"Error al obtener entregas masivas por cédula: {str(e)}")
+
+    def get_entregas_by_date_range(self, start_date, end_date, id_sede=None):
+        """Obtiene TODAS las entregas en un rango de fechas (UNA SOLA por número de entrega).
+        
+        Args:
+            start_date (str): Fecha inicio en formato 'YYYY-MM-DD'.
+            end_date (str): Fecha fin en formato 'YYYY-MM-DD'.
+            id_sede (int): ID de sede para filtrar (opcional).
+            
+        Returns:
+            list: Lista de tuplas con los datos de entregas en el período.
+            
+        Raises:
+            Exception: Si hay error en la consulta.
+        """
+        query = """
+        SELECT
+            rn.IdAdmision,
+            rn.numeroEntrega,
+            CAST(rn.fechaEntrega AS DATE) as fechaEntrega,
+            p.IdUsuario,
+            RTRIM(p.PApellido) + ' ' + RTRIM(ISNULL(p.SApellido,'')) + ' ' + 
+            RTRIM(p.PNombre) + ' ' + RTRIM(ISNULL(p.SNombre,'')) as nombrePaciente,
+            ISNULL(s.SedeNombre, 'N/A') as SedeNombre
+        FROM (
+            SELECT 
+                d.IdAdmision,
+                d.numeroEntrega,
+                d.fechaEntrega,
+                d.idSede,
+                a.IdUsuario,
+                ROW_NUMBER() OVER (PARTITION BY d.numeroEntrega ORDER BY d.fechaEntrega DESC, d.IdAdmision DESC) as rn
+            FROM RedMedicronIPS..DispensacionFarmaciaPGP d
+            INNER JOIN SIFacturacion..mAdmisiones a ON d.IdAdmision = a.IdAdmision
+            WHERE CAST(d.fechaEntrega AS DATE) BETWEEN ? AND ? AND d.estado = 0
+        ) rn
+        INNER JOIN SIFacturacion..mPacientes p ON rn.IdUsuario = p.IdUsuario
+        LEFT JOIN RedMedicronIPS..GeneralesSede s ON rn.idSede = s.IdSedeSI
+        WHERE rn.rn = 1
+        """ + (f"AND rn.idSede = {id_sede} " if id_sede else "") + """
+        ORDER BY rn.fechaEntrega DESC
+        """
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                result = cursor.execute(query, (start_date, end_date)).fetchall()
+                return result if result else []
+        except pyodbc.Error as e:
+            raise Exception(f"Error al obtener entregas por rango de fechas: {str(e)}")
