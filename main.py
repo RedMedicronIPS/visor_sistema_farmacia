@@ -2,6 +2,7 @@ import sys
 import os
 from threading import Thread
 from datetime import datetime
+from PyPDF2 import PdfMerger
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLineEdit, QPushButton, QTableWidget, QTableWidgetItem, QLabel,
@@ -309,8 +310,11 @@ class AppFarmacia(QMainWindow):
         self.label_folder_bulk = QLabel("📁 Carpeta: (Aplicación)")
         self.btn_select_folder_bulk = QPushButton("📂 Seleccionar Carpeta")
         self.btn_select_folder_bulk.clicked.connect(self._select_output_folder_bulk)
+        self.btn_unificar = QPushButton("🔄 Unificar PDFs")
+        self.btn_unificar.clicked.connect(self._unificar_pdfs)
         folder_layout.addWidget(self.label_folder_bulk)
         folder_layout.addWidget(self.btn_select_folder_bulk)
+        folder_layout.addWidget(self.btn_unificar)
         folder_layout.addStretch()
         layout.addLayout(folder_layout)
         
@@ -421,6 +425,88 @@ class AppFarmacia(QMainWindow):
         else:
             self.output_folder = None
             self.label_folder_bulk.setText("📁 Carpeta: (Aplicación)")
+
+    def _unificar_pdfs(self):
+        """Combina PDFs duplicados del mismo paciente en un solo archivo.
+
+        Busca en la carpeta todos los archivos Acta_Entrega_*.pdf,
+        los agrupa por ID de usuario (número de documento), y para cada
+        grupo con múltiples PDFs:
+        - Combina todas las páginas en un solo PDF
+        - Guarda como Acta_Entrega_<IdUsuario>.pdf
+        - Elimina los archivos originales
+        """
+        folder = self.output_folder
+        if not folder:
+            QMessageBox.warning(self, "⚠ Carpeta no definida",
+                                "Seleccione una carpeta antes de unificar PDFs.")
+            return
+        try:
+            archivos = [f for f in os.listdir(folder)
+                        if f.startswith("Acta_Entrega_") and f.lower().endswith(".pdf")]
+        except Exception as e:
+            QMessageBox.critical(self, "Error de lectura",
+                                 f"No se pudo listar la carpeta:\n{str(e)}")
+            return
+        
+        # Agrupar archivos por ID de usuario
+        grupos = {}
+        for fname in archivos:
+            partes = fname.split("_")
+            if len(partes) < 3:
+                continue
+            idusuario = partes[2]  # Acta_Entrega_<ID>_<orden>.pdf
+            if idusuario not in grupos:
+                grupos[idusuario] = []
+            grupos[idusuario].append(fname)
+        
+        combinados = 0
+        eliminados = 0
+        
+        for idusuario, pdfs in grupos.items():
+            if len(pdfs) == 1:
+                # Solo un PDF, solo renombrar si es necesario
+                fname_orig = pdfs[0]
+                fname_final = f"Acta_Entrega_{idusuario}.pdf"
+                if fname_orig != fname_final:
+                    try:
+                        os.rename(os.path.join(folder, fname_orig),
+                                  os.path.join(folder, fname_final))
+                    except Exception:
+                        pass
+            else:
+                # Múltiples PDFs: combinar
+                pdfs_ordenados = sorted(pdfs)  # Orden alfabético
+                ruta_final = os.path.join(folder, f"Acta_Entrega_{idusuario}.pdf")
+                
+                try:
+                    merger = PdfMerger()
+                    for pdf_name in pdfs_ordenados:
+                        ruta_pdf = os.path.join(folder, pdf_name)
+                        merger.append(ruta_pdf)
+                    
+                    merger.write(ruta_final)
+                    merger.close()
+                    
+                    combinados += 1
+                    
+                    # Eliminar archivos originales tras combinar exitosamente
+                    for pdf_name in pdfs_ordenados:
+                        try:
+                            os.remove(os.path.join(folder, pdf_name))
+                            eliminados += 1
+                        except Exception:
+                            pass
+                
+                except Exception as e:
+                    QMessageBox.warning(self, "Error al combinar",
+                                        f"ID {idusuario}: {str(e)}")
+                    continue
+        
+        QMessageBox.information(
+            self, "Unificación completa",
+            f"Combinados: {combinados}\nEliminados: {eliminados} archivos duplicados"
+        )
 
     def _generar_masiva_cedula(self):
         """Genera todos los PDFs de un paciente por cédula."""
