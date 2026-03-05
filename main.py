@@ -74,47 +74,64 @@ class AppFarmacia(QMainWindow):
         central_widget = QWidget()
         main_layout = QVBoxLayout(central_widget)
         
+        # Estado del workflow (0=documento, 1=admisión, 2=entrega)
+        self.workflow_stage = 0
+        self.current_documento = None
+        self.current_admision = None
+        
         # Sección de búsqueda
         search_layout = QHBoxLayout()
-        self.input_adm = QLineEdit()
-        self.input_adm.setPlaceholderText("Escriba el número de admisión...")
-        self.input_adm.returnPressed.connect(self.cargar_entregas)  # Buscar al presionar Enter
+        self.input_search = QLineEdit()
+        self.input_search.setPlaceholderText("Ingrese número de documento...")
+        self.input_search.returnPressed.connect(self.realizar_busqueda)
         
-        self.btn_buscar = QPushButton("🔍 Buscar Entregas")
-        self.btn_buscar.clicked.connect(self.cargar_entregas)
+        self.btn_buscar = QPushButton("🔍 Buscar")
+        self.btn_buscar.clicked.connect(self.realizar_busqueda)
         
-        search_layout.addWidget(QLabel("Admisión:"))
-        search_layout.addWidget(self.input_adm)
+        self.btn_reset = QPushButton("↩ Nuevo")
+        self.btn_reset.clicked.connect(self._reset_workflow)
+        self.btn_reset.setEnabled(False)
+        
+        search_layout.addWidget(QLabel("Documento:"))
+        search_layout.addWidget(self.input_search)
         search_layout.addWidget(self.btn_buscar)
+        search_layout.addWidget(self.btn_reset)
         
-        # Tabla de entregas
-        self.tabla = QTableWidget(0, 2)
-        self.tabla.setHorizontalHeaderLabels(["Nº Entrega", "Fecha Entrega"])
-        self.tabla.setColumnWidth(0, 150)
-        self.tabla.setColumnWidth(1, 200)
+        # Etiqueta dinámica para la tabla
+        self.table_label = QLabel("Admisiones disponibles:")
+        
+        # Tabla (reutilizada para admisiones o entregas)
+        self.tabla = QTableWidget(0, 3)
         self.tabla.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.tabla.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
+        self.tabla.itemDoubleClicked.connect(self._handle_double_click)
+        self.tabla.selectionModel().selectionChanged.connect(self._handle_selection_changed)
         
-        # Sección de generación
+        # Sección de generación / siguiente paso
         gen_layout = QHBoxLayout()
-        self.btn_imprimir = QPushButton("🖨 Generar e Imprimir PDF")
-        self.btn_imprimir.clicked.connect(self.generar)
-        self.btn_imprimir.setEnabled(False)
+        self.btn_accion = QPushButton("▶ Siguiente")
+        self.btn_accion.clicked.connect(self.realizar_accion)
+        self.btn_accion.setEnabled(False)
+        
+        self.btn_volver = QPushButton("◀ Volver")
+        self.btn_volver.clicked.connect(self._volver_a_admisiones)
+        self.btn_volver.setEnabled(False)
         
         gen_layout.addStretch()
-        gen_layout.addWidget(self.btn_imprimir)
+        gen_layout.addWidget(self.btn_volver)
+        gen_layout.addWidget(self.btn_accion)
         
         # Progress Bar
         self.progress_bar = QProgressBar()
         self.progress_bar.setVisible(False)
-        self.progress_bar.setRange(0, 0)  # Indeterminado
+        self.progress_bar.setRange(0, 0)
         
         self.status_label = QLabel("")
         self.status_label.setStyleSheet("color: #555; font-size: 10pt;")
         
         # Agregar todo al layout principal
         main_layout.addLayout(search_layout)
-        main_layout.addWidget(QLabel("Entregas disponibles:"))
+        main_layout.addWidget(self.table_label)
         main_layout.addWidget(self.tabla)
         main_layout.addLayout(gen_layout)
         main_layout.addWidget(self.progress_bar)
@@ -123,52 +140,236 @@ class AppFarmacia(QMainWindow):
         central_widget.setLayout(main_layout)
         self.setCentralWidget(central_widget)
 
-    def cargar_entregas(self):
-        """Carga las entregas para la admisión especificada."""
-        adm = self.input_adm.text().strip()
-        if not adm:
-            QMessageBox.warning(self, "⚠ Advertencia", "Por favor ingrese un número de admisión.")
+    def realizar_busqueda(self):
+        """Busca según el stage actual (documento, admisión o entrega)."""
+        text = self.input_search.text().strip()
+        if not text:
+            QMessageBox.warning(self, "⚠ Advertencia", "Por favor ingrese un valor.")
             return
         
         self.btn_buscar.setEnabled(False)
-        self.status_label.setText("🔍 Buscando entregas...")
+        self.status_label.setText("🔍 Buscando...")
         
         try:
-            res = self.db.get_entregas(adm)
+            if self.workflow_stage == 0:
+                # STAGE 0: Buscar paciente por documento
+                paciente = self.db.search_pacientes_by_documento(text)
+                if not paciente:
+                    QMessageBox.information(
+                        self, "📄 No encontrado",
+                        f"No se encontró paciente con documento: {text}"
+                    )
+                    self.status_label.setText("")
+                    return
+                
+                self.current_documento = paciente.IdUsuario
+                self.tabla.setRowCount(0)
+                self.tabla.setHorizontalHeaderLabels(["Admisión", "Fecha Ingreso", "Entregas"])
+                
+                # Obtener solo admisiones CON entregas
+                admisiones = self.db.get_admisiones_with_entregas(paciente.IdUsuario)
+                if not admisiones:
+                    QMessageBox.information(
+                        self, "📄 Sin Entregas",
+                        f"El paciente {paciente.NombrePaciente}\nno tiene entregas registradas."
+                    )
+                    self.status_label.setText("")
+                    return
+                
+                for i, row in enumerate(admisiones):
+                    self.tabla.insertRow(i)
+                    self.tabla.setItem(i, 0, QTableWidgetItem(str(row.IdAdmision)))
+                    self.tabla.setItem(i, 1, QTableWidgetItem(str(row.FechaIngreso)))
+                    self.tabla.setItem(i, 2, QTableWidgetItem(str(row.NumeroEntregas)))
+                
+                self.workflow_stage = 1
+                self.input_search.clear()
+                self.input_search.setPlaceholderText("(Seleccione admisión arriba)")
+                self.btn_buscar.setText("🔍 Buscar")
+                self.btn_buscar.setEnabled(False)  # Sin usar en stage 1
+                self.btn_accion.setText("▶ Cargar Entregas")
+                self.btn_accion.setEnabled(True)
+                self.btn_reset.setEnabled(True)
+                self.table_label.setText(f"Admisiones del paciente: {paciente.NombrePaciente}")
+                self.status_label.setText(f"✓ {len(admisiones)} admisión(es) encontrada(s)")
+                
+            elif self.workflow_stage == 1:
+                # STAGE 1: Debe seleccionar admisión de la tabla
+                idx = self.tabla.currentRow()
+                if idx < 0:
+                    QMessageBox.warning(
+                        self, "⚠ Selección Requerida",
+                        "Por favor seleccione una admisión de la lista."
+                    )
+                else:
+                    adm = self.tabla.item(idx, 0).text()
+                    self._cargar_entregas(adm)
+                    
+        except Exception as e:
+            QMessageBox.critical(
+                self, "❌ Error",
+                f"Error en la búsqueda:\n{str(e)}"
+            )
+            self.status_label.setText("❌ Error en búsqueda")
+        finally:
+            self.btn_buscar.setEnabled(True)
+
+    def _cargar_entregas(self, id_admision):
+        """Carga las entregas de una admisión."""
+        try:
+            entregas = self.db.get_entregas(id_admision)
             self.tabla.setRowCount(0)
+            self.tabla.setColumnCount(4)
+            self.tabla.setHorizontalHeaderLabels(["Nº Entrega", "Fecha Entrega", "Funcionario", ""])
             
-            if not res:
+            if not entregas:
                 QMessageBox.information(
-                    self, "📄 Sin Resultados",
-                    f"No se encontraron entregas para la admisión: {adm}"
+                    self, "📄 Sin Entregas",
+                    f"No hay entregas registradas para admisión {id_admision}"
                 )
-                self.status_label.setText("")
-                self.btn_buscar.setEnabled(True)
                 return
             
-            for i, row in enumerate(res):
+            for i, row in enumerate(entregas):
                 self.tabla.insertRow(i)
                 self.tabla.setItem(i, 0, QTableWidgetItem(str(row.numeroEntrega)))
                 fecha_str = str(row.fechaEntrega)[:10] if row.fechaEntrega else "N/A"
                 self.tabla.setItem(i, 1, QTableWidgetItem(fecha_str))
+                # Agregar nombre del funcionario
+                funcionario_str = row.funcionarioNombre if hasattr(row, 'funcionarioNombre') else "N/A"
+                self.tabla.setItem(i, 2, QTableWidgetItem(funcionario_str))
             
-            self.btn_imprimir.setEnabled(True)
-            self.status_label.setText(f"✓ Se encontraron {len(res)} entrega(s)")
-            if len(res) == 1:
-                self.tabla.selectRow(0)  # Seleccionar automáticamente si hay solo una
-                
+            self.workflow_stage = 2
+            self.current_admision = id_admision
+            self.input_search.setPlaceholderText("(Seleccione entrega)")
+            self.btn_buscar.setEnabled(False)  # Sin usar en stage 2
+            self.btn_accion.setText("🖨 Generar PDF")
+            self.btn_accion.setEnabled(True)
+            self.btn_volver.setEnabled(True)
+            self.table_label.setText(f"Entregas - Admisión {id_admision}")
+            self.status_label.setText(f"✓ {len(entregas)} entrega(s) encontrada(s)")
+            
         except Exception as e:
-            QMessageBox.critical(
-                self, "❌ Error de Conexión",
-                f"No se pudo conectar a la base de datos:\n{str(e)}\n\n"
-                f"Verifique que el servidor SQL Server esté disponible en 192.168.59.230"
-            )
-            self.status_label.setText("❌ Error de conexión a BD")
-        finally:
-            self.btn_buscar.setEnabled(True)
+            QMessageBox.critical(self, "❌ Error", f"Error al cargar entregas:\n{str(e)}")
+            self.status_label.setText("❌ Error al cargar entregas")
 
-    def generar(self):
-        """Genera el PDF del acta de entrega seleccionada."""
+    def realizar_accion(self):
+        """Ejecuta la acción del botón según el stage."""
+        if self.workflow_stage == 1:
+            # Stage 1: Seleccionar y cargar entregas desde tabla
+            idx = self.tabla.currentRow()
+            if idx < 0:
+                QMessageBox.warning(self, "⚠ Selección Requerida", "Por favor seleccione una admisión.")
+            else:
+                adm = self.tabla.item(idx, 0).text()
+                self._cargar_entregas(adm)
+        elif self.workflow_stage == 2:
+            # Stage 2: Generar PDF
+            self.generar_pdf()
+
+    def _handle_double_click(self, item):
+        """Permite avanzar con doble clic en la tabla."""
+        if self.workflow_stage == 1:
+            self.realizar_busqueda()
+        elif self.workflow_stage == 2:
+            self.generar_pdf()
+
+    def _handle_selection_changed(self):
+        """Automáticamente carga entregas cuando selecciona una admisión en stage 1."""
+        if self.workflow_stage == 1:
+            # Auto-cargar entregas cuando selecciona una admisión
+            idx = self.tabla.currentRow()
+            if idx >= 0:
+                adm = self.tabla.item(idx, 0).text()
+                self._cargar_entregas_rapido(adm)
+        elif self.workflow_stage == 2:
+            # Solo habilitar botón cuando hay selección en stage 2
+            idx = self.tabla.currentRow()
+            self.btn_accion.setEnabled(idx >= 0)
+
+    def _cargar_entregas_rapido(self, id_admision):
+        """Versión rápida que carga entregas sin mostrar messageboxes."""
+        try:
+            entregas = self.db.get_entregas(id_admision)
+            if not entregas:
+                # Si no hay entregas, no cambiar de stage
+                return
+            
+            self.tabla.setRowCount(0)
+            self.tabla.setColumnCount(4)
+            self.tabla.setHorizontalHeaderLabels(["Nº Entrega", "Fecha Entrega", "Funcionario", ""])
+            
+            for i, row in enumerate(entregas):
+                self.tabla.insertRow(i)
+                self.tabla.setItem(i, 0, QTableWidgetItem(str(row.numeroEntrega)))
+                fecha_str = str(row.fechaEntrega)[:10] if row.fechaEntrega else "N/A"
+                self.tabla.setItem(i, 1, QTableWidgetItem(fecha_str))
+                # Agregar nombre del funcionario
+                funcionario_str = row.funcionarioNombre if hasattr(row, 'funcionarioNombre') else "N/A"
+                self.tabla.setItem(i, 2, QTableWidgetItem(funcionario_str))
+            
+            self.workflow_stage = 2
+            self.current_admision = id_admision
+            self.input_search.clear()
+            self.input_search.setPlaceholderText("(Seleccione entrega)")
+            self.btn_buscar.setEnabled(False)
+            self.btn_accion.setText("🖨 Generar PDF")
+            self.btn_accion.setEnabled(True)
+            self.btn_volver.setEnabled(True)
+            self.table_label.setText(f"Entregas - Admisión {id_admision}")
+            self.status_label.setText(f"✓ {len(entregas)} entrega(s)")
+            
+        except Exception as e:
+            QMessageBox.critical(self, "❌ Error", f"Error al cargar entregas:\n{str(e)}")
+            self.status_label.setText("❌ Error al cargar entregas")
+
+    def _reset_workflow(self):
+        """Vuelve al inicio del workflow."""
+        self.workflow_stage = 0
+        self.current_documento = None
+        self.current_admision = None
+        self.input_search.setText("")
+        self.input_search.setPlaceholderText("Ingrese número de documento...")
+        self.btn_buscar.setText("🔍 Buscar")
+        self.btn_buscar.setEnabled(True)
+        self.btn_accion.setText("▶ Siguiente")
+        self.btn_accion.setEnabled(False)
+        self.btn_volver.setEnabled(False)
+        self.btn_reset.setEnabled(False)
+        self.table_label.setText("Admisiones disponibles:")
+        self.tabla.setRowCount(0)
+        self.status_label.setText("")
+    
+    def _volver_a_admisiones(self):
+        """Vuelve a la pantalla de admisiones sin resetear el documento."""
+        self.workflow_stage = 1
+        self.current_admision = None
+        self.tabla.setRowCount(0)
+        self.tabla.setColumnCount(3)
+        self.tabla.setHorizontalHeaderLabels(["Admisión", "Fecha Ingreso", "Entregas"])
+        
+        # Recargar las admisiones del documento actual
+        try:
+            admisiones = self.db.get_admisiones_with_entregas(self.current_documento)
+            for i, row in enumerate(admisiones):
+                self.tabla.insertRow(i)
+                self.tabla.setItem(i, 0, QTableWidgetItem(str(row.IdAdmision)))
+                self.tabla.setItem(i, 1, QTableWidgetItem(str(row.FechaIngreso)))
+                self.tabla.setItem(i, 2, QTableWidgetItem(str(row.NumeroEntregas)))
+            
+            self.input_search.setPlaceholderText("(Seleccione admisión arriba)")
+            self.btn_buscar.setEnabled(False)
+            self.btn_accion.setText("▶ Cargar Entregas")
+            self.btn_accion.setEnabled(True)
+            self.btn_volver.setEnabled(False)
+            self.btn_reset.setEnabled(True)
+            self.table_label.setText("Admisiones disponibles:")
+            self.status_label.setText(f"✓ {len(admisiones)} admisión(es) disponible(s)")
+        except Exception as e:
+            QMessageBox.critical(self, "❌ Error", f"Error al recargar admisiones:\n{str(e)}")
+            self.status_label.setText("❌ Error al recargar admisiones")
+
+    def generar_pdf(self):
+        """Genera el PDF de la entrega seleccionada."""
         idx = self.tabla.currentRow()
         if idx < 0:
             QMessageBox.warning(
@@ -178,7 +379,6 @@ class AppFarmacia(QMainWindow):
             return
         
         n_entrega = self.tabla.item(idx, 0).text()
-        adm = self.input_adm.text().strip()
         
         # Validar que no haya otro proceso en curso
         if self.worker and self.worker.is_alive():
@@ -191,16 +391,17 @@ class AppFarmacia(QMainWindow):
         # Mostrar progress bar
         self.progress_bar.setVisible(True)
         self.btn_buscar.setEnabled(False)
-        self.btn_imprimir.setEnabled(False)
-        self.input_adm.setEnabled(False)
+        self.btn_accion.setEnabled(False)
+        self.input_search.setEnabled(False)
         self.tabla.setEnabled(False)
         
         # Crear y ejecutar worker
-        self.worker = PDFWorker(self.db, self.gen, adm, n_entrega)
+        self.worker = PDFWorker(self.db, self.gen, self.current_admision, n_entrega)
         self.worker.signals.progress.connect(self._on_progress)
         self.worker.signals.finished.connect(self._on_success)
         self.worker.signals.error.connect(self._on_error)
         self.worker.start()
+
     
     def _on_progress(self, message):
         """Maneja actualizaciones de progreso."""
@@ -227,8 +428,8 @@ class AppFarmacia(QMainWindow):
     def _reset_buttons(self):
         """Restaura el estado de los botones después de procesar."""
         self.btn_buscar.setEnabled(True)
-        self.btn_imprimir.setEnabled(True)
-        self.input_adm.setEnabled(True)
+        self.btn_accion.setEnabled(self.workflow_stage > 0)  # Habilitar solo si no está en stage 0
+        self.input_search.setEnabled(True)
         self.tabla.setEnabled(True)
 
 if __name__ == "__main__":

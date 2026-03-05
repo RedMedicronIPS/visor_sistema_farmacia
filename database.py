@@ -34,22 +34,26 @@ class DataManager:
     def get_entregas(self, id_admision):
         """Busca las diferentes entregas asociadas a una admisión.
         
-        Retorna UN SOLO registro por cada número de entrega.
+        Retorna UN SOLO registro por cada número de entrega con datos del funcionario.
         
         Args:
             id_admision (int o str): Identificador de la admisión.
             
         Returns:
-            list: Lista de tuplas (numeroEntrega, fechaEntrega).
+            list: Lista de tuplas (numeroEntrega, fechaEntrega, funcionarioNombre).
             
         Raises:
             Exception: Si hay error de conexión o consulta SQL.
         """
         query = """
-        SELECT DISTINCT numeroEntrega, MAX(fechaEntrega) as fechaEntrega
-        FROM RedMedicronIPS..DispensacionFarmaciaPGP 
-        WHERE IdAdmision = ? AND estado = 0
-        GROUP BY numeroEntrega
+        SELECT DISTINCT 
+            d.numeroEntrega, 
+            MAX(d.fechaEntrega) as fechaEntrega,
+            ISNULL(u.UsuarioNombre, 'N/A') as funcionarioNombre
+        FROM RedMedicronIPS..DispensacionFarmaciaPGP d
+        LEFT JOIN RedMedicronIPS..GeneralesUsuario u ON d.usuarioRegistra = u.id
+        WHERE d.IdAdmision = ? AND d.estado = 0
+        GROUP BY d.numeroEntrega, u.UsuarioNombre
         ORDER BY fechaEntrega DESC
         """
         try:
@@ -67,6 +71,67 @@ class DataManager:
                 )
             else:
                 raise Exception(f"Error en consulta de entregas: {str(e)}")
+
+    def search_pacientes_by_documento(self, id_usuario):
+        """Busca un paciente por número de documento.
+        
+        Args:
+            id_usuario (str): Número de documento del paciente.
+            
+        Returns:
+            tuple: (IdUsuario, NombrePaciente, NoHistoria) o None si no existe.
+            
+        Raises:
+            Exception: Si hay error en la consulta.
+        """
+        query = """
+        SELECT TOP 1 
+            p.IdUsuario,
+            RTRIM(p.PApellido) + ' ' + RTRIM(ISNULL(p.SApellido,'')) + ' ' + 
+            RTRIM(p.PNombre) + ' ' + RTRIM(ISNULL(p.SNombre,'')) as NombrePaciente,
+            p.NoHistoria
+        FROM SIFacturacion..mPacientes p
+        WHERE p.IdUsuario = ?
+        """
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                result = cursor.execute(query, (id_usuario,)).fetchone()
+                return result
+        except pyodbc.Error as e:
+            raise Exception(f"Error al buscar paciente: {str(e)}")
+
+    def get_admisiones_with_entregas(self, id_usuario):
+        """Obtiene SOLO las admisiones que tienen entregas registradas.
+        
+        Args:
+            id_usuario (str): Número de documento del paciente.
+            
+        Returns:
+            list: Lista de tuplas (IdAdmision, FechaIngreso, NumeroEntregas).
+            
+        Raises:
+            Exception: Si hay error en la consulta.
+        """
+        query = """
+        SELECT 
+            a.IdAdmision,
+            CONVERT(VARCHAR(10), a.FechaIngreso, 120) as FechaIngreso,
+            COUNT(DISTINCT d.numeroEntrega) as NumeroEntregas
+        FROM SIFacturacion..mAdmisiones a
+        INNER JOIN RedMedicronIPS..DispensacionFarmaciaPGP d ON a.IdAdmision = d.IdAdmision
+        WHERE a.IdUsuario = ? AND d.estado = 0
+        GROUP BY a.IdAdmision, a.FechaIngreso
+        HAVING COUNT(DISTINCT d.numeroEntrega) > 0
+        ORDER BY a.FechaIngreso DESC
+        """
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                result = cursor.execute(query, (id_usuario,)).fetchall()
+                return result if result else []
+        except pyodbc.Error as e:
+            raise Exception(f"Error al obtener admisiones: {str(e)}")
 
     def get_datos_completos(self, id_admision, n_entrega):
         """Obtiene todos los datos necesarios para generar el acta de entrega.
