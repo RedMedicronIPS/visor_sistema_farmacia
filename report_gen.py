@@ -98,7 +98,7 @@ class ReportGenerator:
             raise FileNotFoundError(f"No se encontró la plantilla en: {template_path}")
         
         temp_word = os.path.join(base_path, f"temp_{id_entrega}.docx")
-        pdf_final = os.path.join(base_path, f"Acta_Entrega_{id_entrega}.pdf")
+        pdf_final = os.path.join(base_path, f"Acta_Entrega_{header.IdUsuario}_{id_entrega}.pdf")
         
         try:
             # 1. Validar que el PDF de salida no esté abierto
