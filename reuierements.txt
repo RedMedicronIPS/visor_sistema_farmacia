@@ -1,2 +1,0 @@
-
-pip install PyQt6 pyodbc docxtpl docx2pdf
