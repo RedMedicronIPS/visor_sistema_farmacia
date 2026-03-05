@@ -1,0 +1,55 @@
+# Entorno Virtual
+venv/
+env/
+ENV/
+.venv
+
+# Archivos temporales generados
+temp_*.docx
+Acta_Entrega_*.pdf
+
+# Caché de Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Distribución
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Configuración sensible (IMPORTANTE)
+config.py
+.env
+.env.local
+*.db
+*.log
+
+# Archivos del sistema
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Reportes temporales
+*.xlsx
+*.xls
+*.tmp

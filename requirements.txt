@@ -1,0 +1,18 @@
+# Dependencias del Sistema de Generación de Actas de Entrega
+# Python 3.12+
+
+# GUI Framework
+PyQt6>=6.6.0
+
+# Base de Datos
+pyodbc>=5.0.0
+
+# Procesamiento de Documentos Word
+python-docx>=0.8.11
+docxtpl>=0.16.0
+
+# Conversión a PDF (requiere Microsoft Word instalado)
+docx2pdf>=1.3.0
+
+# Variables de Entorno
+python-dotenv>=1.0.0
