@@ -34,6 +34,8 @@ class DataManager:
     def get_entregas(self, id_admision):
         """Busca las diferentes entregas asociadas a una admisión.
         
+        Retorna UN SOLO registro por cada número de entrega.
+        
         Args:
             id_admision (int o str): Identificador de la admisión.
             
@@ -44,9 +46,10 @@ class DataManager:
             Exception: Si hay error de conexión o consulta SQL.
         """
         query = """
-        SELECT DISTINCT numeroEntrega, fechaEntrega 
+        SELECT DISTINCT numeroEntrega, MAX(fechaEntrega) as fechaEntrega
         FROM RedMedicronIPS..DispensacionFarmaciaPGP 
         WHERE IdAdmision = ? AND estado = 0
+        GROUP BY numeroEntrega
         ORDER BY fechaEntrega DESC
         """
         try:
