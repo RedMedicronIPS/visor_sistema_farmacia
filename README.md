@@ -130,6 +130,111 @@ Indica el estado de las operaciones:
 ---
 
 ## 🏗️ Arquitectura del Proyecto
+> **Nota**: este proyecto puede empacarse en un solo ejecutable (.exe) para distribución.
+
+### 📦 Empaquetado a `.exe`
+
+Para que el sistema se pueda ejecutar en máquinas donde no haya Python ni dependencias instaladas, se utiliza [PyInstaller](https://www.pyinstaller.org/) para generar un solo archivo ejecutable. **Advertencia importante**: _la conversión DOCX→PDF se hace mediante Microsoft Word_, por lo que Word debe estar instalado y accesible en cada equipo donde se ejecute el EXE. Si la aplicación no encuentra Word mostrará un error como:
+
+> "Error durante conversión PDF: 'NoneType' object has no attribute 'write'"
+
+A partir de la versión actual el programa detecta esta situación y sugiere comprobar la instalación.
+
+El proceso básico es:
+
+1. Activar el entorno virtual:
+   ```powershell
+   cd "g:\Desarollo Red Medicron IPS\SistemaFarmacia"
+   venv\Scripts\activate
+   ```
+
+2. Instalar PyInstaller (ya incluido en `requirements.txt`):
+   ```powershell
+   pip install pyinstaller
+   ```
+
+3. Ejecutar el empaquetado desde la raíz del proyecto:
+   ```powershell
+   pyinstaller \
+     --noconfirm \
+     --onefile \
+     --windowed \
+     --icon=icono.ico \
+     --add-data "ACTA_MEDICAMENTOS.docx;." \
+     main.py
+   ```
+   - `--onefile` produce un solo `.exe` en `dist\`.
+   - `--windowed` evita que se abra una consola al ejecutar la aplicación.
+   - `--icon` asigna el icono provisto (`icono.ico`).
+   - `--add-data` empaqueta la plantilla Word y cualquier otro recurso necesario.   
+   **Importante**: el ejecutable **no contiene las credenciales de SQL**. Debes
+   proporcionar un archivo `.env` junto al EXE con las variables
+   `SQL_SERVER`, `SQL_DATABASE`, `SQL_DRIVER`, `SQL_USER` y
+   `SQL_PASSWORD`, o bien modificar `config.py` antes de empaquetar para que
+   incluya directamente la cadena de conexión. Si no hay datos válidos, al
+   iniciar la aplicación verás el siguiente mensaje:
+
+   > "Error en la búsqueda: Error de autenticación SQL Server. Verifique usuario
+   > y contraseña en config.py"
+
+   Esta verificación se hace en
+   `config.py` y ahora intenta cargar `.env` desde la carpeta del ejecutable.
+   Si prefieres no usar `.env`, puedes definir las variables de entorno en el
+   sistema destino (PowerShell: `$env:SQL_USER = '...'`).
+4. **Adaptaciones del código**: el módulo `report_gen.py` ya soporta cargar recursos dentro del ejecutable mediante la función `_resource_path()`. Esta función utiliza `sys._MEIPASS` cuando el programa está empaquetado.
+
+5. **Opcional: editar el spec**: PyInstaller genera `main.spec` que puede ajustarse para incluir más datos, cambiar nombre del ejecutable, etc. Un ejemplo mínimo:
+   ```python
+   # -*- mode: python ; coding: utf-8 -*-
+
+   block_cipher = None
+   a = Analysis(
+       ['main.py'],
+       pathex=['.'],
+       binaries=[],
+       datas=[('ACTA_MEDICAMENTOS.docx', '.')],
+       hiddenimports=[],
+       hookspath=[],
+       runtime_hooks=[],
+       excludes=[],
+       win_no_prefer_redirects=False,
+       win_private_assemblies=False,
+       cipher=block_cipher,
+   )
+   pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
+   exe = EXE(
+       pyz,
+       a.scripts,
+       [],
+       exclude_binaries=True,
+       name='SistemaFarmacia',
+       debug=False,
+       bootloader_ignore_signals=False,
+       strip=False,
+       upx=True,
+       console=False,
+       icon='icono.ico'
+   )
+   coll = COLLECT(
+       exe,
+       a.binaries,
+       a.zipfiles,
+       a.datas,
+       strip=False,
+       upx=True,
+       name='SistemaFarmacia'
+   )
+   ```
+   Guardar y ejecutar:
+   ```powershell
+   pyinstaller main.spec
+   ```
+
+6. **Resultado**: el ejecutable final aparece en `dist\` (por defecto `main.exe`). Puedes renombrarlo y distribuirlo; ya contiene Python y las dependencias.
+
+> ⚠️ Al ejecutar por primera vez Windows puede mostrar advertencias de SmartScreen. Para despliegues formales se recomienda firmar el EXE.
+
+---
 
 ```
 SistemaFarmacia/

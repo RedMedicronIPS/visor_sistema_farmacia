@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="utf-8">
+
+    <style>
+        @page {
+            size: letter;
+            margin: 0.8cm;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            font-size: 8.5pt;
+            color: #000;
+            line-height: 1.2;
+            margin: 0;
+            padding: 0;
+        }
+
+        .content {
+            width: 100%;
+        }
+
+        /* TABLAS GENERALES */
+        table {
+            border-collapse: collapse;
+        }
+
+        .table-small {
+            font-size: 7pt;
+        }
+
+        .table-small td {
+            padding: 2pt 4pt;
+        }
+
+        td {
+            border: 0.5pt solid #000;
+            padding: 3pt 5pt;
+            vertical-align: middle;
+        }
+
+        /* HEADER */
+        .header-meta td {
+            font-size: 7pt;
+            padding: 1pt 3pt;
+        }
+
+        .bg-gray {
+            background-color: #F2F2F2;
+            font-weight: bold;
+            text-align: center;
+        }
+
+        .text-center {
+            text-align: center;
+        }
+
+        .text-bold {
+            font-weight: bold;
+        }
+
+        /* DATOS PACIENTE */
+        .lbl {
+            background: #F2F2F2;
+            font-weight: bold;
+            width: 18%;
+        }
+
+        .val {
+            width: 15.33%;
+        }
+
+        /* TABLA FIRMAS */
+        .table-firmas {
+            width: 30%;
+        }
+
+        /* FOOTER */
+        .footer-container {
+            margin-top: 15px;
+            padding-top: 6px;
+            text-align: center;
+            border-top: 1px dotted #999;
+        }
+
+        .footer-container img {
+            height: 28px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="content">
+
+        <!-- HEADER -->
+
+        <table width="100%">
+
+            <tr>
+
+                <td rowspan="2" width="20%" class="text-center">
+                    <img src="{{ logo1 }}" style="height:40px;">
+                </td>
+
+                <td class="text-center text-bold">
+                    PROCESO ATENCIÓN SERVICIO FARMACÉUTICO
+                </td>
+
+                <td rowspan="2" width="25%" style="padding:0">
+
+                    <table class="header-meta" width="100%" style="border:none">
+
+                        <tr>
+                            <td style="border:none;border-bottom:0.5pt solid #000">
+                                Código: FR-SEF-014
+                            </td>
+                        </tr>
+
+                        <tr>
+                            <td style="border:none;border-bottom:0.5pt solid #000">
+                                Versión: 00
+                            </td>
+                        </tr>
+
+                        <tr>
+                            <td style="border:none;border-bottom:0.5pt solid #000">
+                                Fecha de aprobación: 06 de marzo de 2026
+                            </td>
+                        </tr>
+
+                        <tr>
+                            <td style="border:none">
+                                Página: 1 de 1
+                            </td>
+                        </tr>
+
+                    </table>
+
+                </td>
+
+            </tr>
+
+            <tr>
+
+                <td class="text-center text-bold">
+                    ACTA DE ENTREGA DE MEDICAMENTOS
+                </td>
+
+            </tr>
+
+        </table>
+
+        <br>
+
+        <h3>I. INFORMACIÓN DEL PACIENTE</h3>
+
+        <table width="100%" class="table-small" style="table-layout:fixed;">
+
+            <tr>
+                <td class="lbl" style="width:10%;">No. H. C.</td>
+                <td class="val" style="width:20%;">{{ hc }}</td>
+
+                <td class="lbl" style="width:10%;">ADMISION</td>
+                <td class="val" style="width:20%;">{{ admision }}</td>
+
+                <td class="lbl" style="width:15%;">ID. ENTREGA</td>
+                <td class="val" style="width:25%;">{{ id_entrega }}</td>
+            </tr>
+
+            <tr>
+                <td class="lbl">SEDE</td>
+                <td colspan="2">{{ sede }}</td>
+
+                <td class="lbl">FECHA ENTREGA</td>
+                <td colspan="2">{{ fecha_firma }}</td>
+            </tr>
+
+            <tr>
+                <td class="lbl">ID. PACIENTE</td>
+                <td>{{ doc_id }}</td>
+
+                <td class="lbl">PACIENTE</td>
+                <td colspan="3" class="text-bold">{{ paciente }}</td>
+            </tr>
+
+        </table>
+        <br>
+
+        <h3>II. MEDICAMENTOS ENTREGADOS</h3>
+
+        <table width="100%" class="table-small">
+
+            <thead>
+                <tr class="bg-gray">
+                    <td width="40%">MEDICAMENTO</td>
+                    <td>N. LOTE</td>
+                    <td>N. ORDEN</td>
+                    <td>FORMULADO</td>
+                    <td>ENTREGADO</td>
+                    <td>PENDIENTE</td>
+                </tr>
+            </thead>
+
+            <tbody>
+                {% for m in medicamentos %}
+                <tr class="text-center">
+                    <td style="text-align:left">
+                        {{ m.nombre }}
+                    </td>
+                    <td>{{ m.lote }}</td>
+                    <td>{{ m.orden }}</td>
+                    <td>{{ m.ordenado }}</td>
+                    <td>{{ m.entregado }}</td>
+                    <td>{{ m.pendiente }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <br>
+
+        <!-- TABLA FIRMAS -->
+        <table width="100%" style="border:0;">
+            <tr>
+                <td width="30%" style="border:0;"></td>
+
+                <td width="40%" style="border:0;">
+                    <table width="100%" style="border-collapse:collapse; text-align:center;">
+
+                        <!-- Firma paciente -->
+                        <tr>
+                            <td style="border:1px solid #000; padding:4px;">
+
+                                {% if firma_paciente %}
+                                <img src="{{ firma_paciente }}" style="height:35px;"><br>
+                                {% endif %}
+
+                                <div style="border-top:1px solid #000; width:80%; margin:3px auto;"></div>
+
+                                <span style="font-size:9pt; font-weight:bold;">
+                                    QUIEN RECIBE
+                                </span><br>
+
+                                <span style="font-size:8pt;">
+                                    (Paciente / Acudiente)
+                                </span>
+
+                            </td>
+                        </tr>
+
+                        <!-- Firma funcionario -->
+                        <tr>
+                            <td style="border:1px solid #000; padding:3px; text-align:center;">
+
+                                <span style="font-size:8pt; font-weight:bold; line-height:10px;">
+                                    {{ funcionario }}
+                                </span>
+
+                                <div style="border-top:1px solid #000; width:75%; margin:1px auto;"></div>
+
+                                <span style="font-size:7pt; line-height:9px;">
+                                    FUNCIONARIO QUE ENTREGA
+                                </span>
+
+                            </td>
+                        </tr>
+
+                    </table>
+                </td>
+
+                <td width="30%" style="border:0;"></td>
+            </tr>
+        </table>
+
+        </td>
+
+        <!-- columna vacía derecha -->
+        <td width="35%" style="border:0;"></td>
+
+        </tr>
+        </table>
+    </div>
+
+    <!-- FOOTER -->
+
+    <div class="footer-container">
+        <img src="{{ logo_pie }}">
+    </div>
+
+
+</body>
+
+</html>
