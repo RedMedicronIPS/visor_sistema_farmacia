@@ -142,7 +142,18 @@ class BulkPDFWorker(Thread):
                         'estado': 'FALLO',
                         'firma': estado_firma, # <--- Nueva clave para el Excel
                         'color': '#ffcccc', # Verde si tiene firma, amarillo si no
-                        'sede': sede_nombre
+                        'sede': sede_nombre,
+                        # AGREGAMOS EL DETALLE DE MEDICAMENTOS PARA EL EXCEL
+                        'detalle_meds': [
+                           {
+                                'nombre': med.nomSuministro,
+                                'lote': med.numeroLote,
+                                'orden': med.NumeroOrden,
+                                'entregado': med.cantidadEntregada,
+                                'ordenado': med.CantidadFormulada,
+                                'pendiente': med.CantidadFormulada - med.cantidadEntregada
+                            } for med in m
+                        ]
                     }
                     self.resultados.append(resultado)
                     self.signals.row_update.emit(idx, resultado)
@@ -162,7 +173,18 @@ class BulkPDFWorker(Thread):
                     'estado': 'EXITOSO',
                     'firma': estado_firma,
                     'color': '#ccffcc' if f else '#fff3cd',
-                    'sede': sede_nombre
+                    'sede': sede_nombre,
+                    # AGREGAMOS EL DETALLE DE MEDICAMENTOS PARA EL EXCEL
+                    'detalle_meds': [
+                        {
+                            'nombre': med.nomSuministro,
+                            'lote': med.numeroLote,
+                            'orden': med.NumeroOrden,
+                            'entregado': med.cantidadEntregada,
+                            'ordenado': med.CantidadFormulada,
+                            'pendiente': med.CantidadFormulada - med.cantidadEntregada
+                        } for med in m
+                    ]
                 }
                 self.resultados.append(resultado)
                 self.signals.row_update.emit(idx, resultado)
@@ -178,7 +200,18 @@ class BulkPDFWorker(Thread):
                     'estado': 'FALLO',
                     'firma': "ERROR PROCESO",
                     'color': '#ffcccc',
-                    'sede': sede_nombre
+                    'sede': sede_nombre,
+                    # AGREGAMOS EL DETALLE DE MEDICAMENTOS PARA EL EXCEL
+                    'detalle_meds': [
+                        {
+                            'nombre': med.nomSuministro,
+                            'lote': med.numeroLote,
+                            'orden': med.NumeroOrden,
+                            'entregado': med.cantidadEntregada,
+                            'ordenado': med.CantidadFormulada,
+                            'pendiente': med.CantidadFormulada - med.cantidadEntregada
+                        } for med in m
+                    ]
                 }
                 self.resultados.append(resultado)
                 self.signals.row_update.emit(idx, resultado)
@@ -409,8 +442,12 @@ class AppFarmacia(QMainWindow):
         self.btn_generar_excel = QPushButton("📊 Generar Excel de Resultados")
         self.btn_generar_excel.clicked.connect(self._generar_excel_resultados)
         self.btn_generar_excel.setEnabled(False)
+        self.btn_generar_excel_det = QPushButton("💊 Reporte Detallado (Medicamentos)")
+        self.btn_generar_excel_det.clicked.connect(self._generar_excel_detallado)
+        self.btn_generar_excel_det.setEnabled(False)
         bulk_btn_layout.addStretch()
         bulk_btn_layout.addWidget(self.btn_generar_excel)
+        bulk_btn_layout.addWidget(self.btn_generar_excel_det)
         layout.addLayout(bulk_btn_layout)
 
     def _select_output_folder(self):
@@ -655,6 +692,7 @@ class AppFarmacia(QMainWindow):
             f"✓ Procesados: {len(resultados)} | Exitosos: {exitosos} | Fallos: {fallos}"
         )
         self.btn_generar_excel.setEnabled(True)
+        self.btn_generar_excel_det.setEnabled(True)
 
     def _on_error_bulk(self, error_msg):
         """Maneja errores en generación en lote."""
@@ -722,6 +760,73 @@ class AppFarmacia(QMainWindow):
                 
         except Exception as e:
             QMessageBox.critical(self, "❌ Error", f"Error al generar Excel:\n{str(e)}")
+
+
+    def _generar_excel_detallado(self):
+        if not self.worker or not self.worker.resultados:
+            QMessageBox.warning(self, "⚠ Advertencia", "No hay resultados para exportar.")
+            return
+        
+        try:
+            archivo_excel = QFileDialog.getSaveFileName(
+                self, "Guardar Reporte Detallado", "", "Archivos Excel (*.xlsx)"
+            )[0]
+            
+            if not archivo_excel: return
+            
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "Detalle de Medicamentos"
+            
+            # Encabezados detallados
+            encabezados = [
+                "ID Paciente", "Nombre Paciente", "Admisión", "Nro Entrega", 
+                "Fecha Entrega", "Sede", "Soporte Firma",
+                "MEDICAMENTO", "LOTE", "N. ORDEN", "FORMULADO", "ENTREGADO", "PENDIENTE"
+            ]
+            ws.append(encabezados)
+            
+            for res in self.worker.resultados:
+                # Si la entrega fue fallida y no tiene medicamentos, ponemos una fila de error
+                if not res.get('detalle_meds'):
+                    fila_error = [
+                        res['id_usuario'], res['nombre_paciente'], res['admision'], 
+                        res['entrega'], res['fecha'], res.get('sede', 'N/A'), res.get('firma', 'ERROR'),
+                        "SIN DATOS", "N/A", "N/A", 0, 0, 0
+                    ]
+                    ws.append(fila_error)
+                    continue
+
+                # Si tiene medicamentos, creamos una fila por cada medicamento 
+                for med in res['detalle_meds']:
+                    fila = [
+                        res['id_usuario'],
+                        res['nombre_paciente'],
+                        res['admision'],
+                        res['entrega'],
+                        res['fecha'],
+                        res.get('sede', 'N/A'),
+                        res.get('firma', 'N/A'),
+                        med['nombre'],    # Detalle del medicamento 
+                        med['lote'],      # Lote 
+                        med['orden'],     # Nro Orden 
+                        med['ordenado'],  # Cantidad Formulada 
+                        med['entregado'], # Cantidad Entregada 
+                        med['pendiente']  # Cantidad Pendiente 
+                    ]
+                    ws.append(fila)
+            
+            # Formato básico: negrita a encabezados y ajuste de columnas
+            from openpyxl.styles import Font
+            for cell in ws[1]:
+                cell.font = Font(bold=True)
+                
+            wb.save(archivo_excel)
+            QMessageBox.information(self, "✓ Éxito", "Reporte detallado de medicamentos generado correctamente.")
+            os.startfile(archivo_excel)
+                    
+        except Exception as e:
+            QMessageBox.critical(self, "❌ Error", f"Error al generar Excel detallado:\n{str(e)}")
 
     # ===== Métodos de la primera pestaña (sin cambios) =====
     def realizar_busqueda(self):
