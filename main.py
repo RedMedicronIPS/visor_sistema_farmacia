@@ -128,6 +128,8 @@ class BulkPDFWorker(Thread):
                     f"Generando PDF {idx+1}/{total}: {nombre_paciente}..."
                 )
                 h, m, f = self.db.get_datos_completos(id_adm, n_entrega)
+                # Detectar estado de la firma para el Excel
+                estado_firma = "FIRMADO" if f else "SIN FIRMA (Pte. Manual)"
                 
                 if not h:
                     resultado = {
@@ -138,7 +140,8 @@ class BulkPDFWorker(Thread):
                         'fecha': 'N/A',
                         'archivo': 'SIN DATOS',
                         'estado': 'FALLO',
-                        'color': '#ffcccc',
+                        'firma': estado_firma, # <--- Nueva clave para el Excel
+                        'color': '#ffcccc', # Verde si tiene firma, amarillo si no
                         'sede': sede_nombre
                     }
                     self.resultados.append(resultado)
@@ -157,7 +160,8 @@ class BulkPDFWorker(Thread):
                     'fecha': fecha_str,
                     'archivo': filename,
                     'estado': 'EXITOSO',
-                    'color': '#ccffcc',
+                    'firma': estado_firma,
+                    'color': '#ccffcc' if f else '#fff3cd',
                     'sede': sede_nombre
                 }
                 self.resultados.append(resultado)
@@ -172,6 +176,7 @@ class BulkPDFWorker(Thread):
                     'fecha': 'N/A',
                     'archivo': str(e)[:45],
                     'estado': 'FALLO',
+                    'firma': "ERROR PROCESO",
                     'color': '#ffcccc',
                     'sede': sede_nombre
                 }
@@ -192,8 +197,8 @@ class AppFarmacia(QMainWindow):
         self.output_folder = None
         self.sedes = []
         
-        self._cargar_sedes()
         self.setup_ui()
+        self._cargar_sedes()
 
     def setup_ui(self):
         """Configura la interfaz con pestañas."""
@@ -683,7 +688,7 @@ class AppFarmacia(QMainWindow):
             # Encabezados
             encabezados = [
                 "ID Paciente", "Nombre Paciente", "Admisión", "Entrega",
-                "Fecha Entrega", "Archivo PDF", "Estado"
+                "Fecha Entrega", "Archivo PDF", "Estado", "Soporte Firma", "Sede"
             ]
             ws.append(encabezados)
             
@@ -696,11 +701,13 @@ class AppFarmacia(QMainWindow):
                     resultado['entrega'],
                     resultado['fecha'],
                     resultado['archivo'],
-                    resultado['estado']
+                    resultado['estado'],
+                    resultado.get('firma', 'N/A'),
+                    resultado.get('sede', 'N/A')
                 ])
             
             # Ajustar ancho
-            for col in ['A', 'B', 'C', 'D', 'E', 'F', 'G']:
+            for col in ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']:
                 ws.column_dimensions[col].width = 20
             
             wb.save(archivo_excel)

@@ -164,12 +164,15 @@ class DataManager:
                     p.IdUsuario, 
                     s.NombreInstitucion, 
                     u.UsuarioNombre as FuncionarioNombre,
-                    d.IdAdmision
+                    d.IdAdmision,
+                    oe.CodDx
                 FROM RedMedicronIPS..DispensacionFarmaciaPGP d
                 INNER JOIN SIFacturacion..mAdmisiones a ON d.IdAdmision = a.IdAdmision
                 INNER JOIN SIFacturacion..mPacientes p ON a.IdUsuario = p.IdUsuario 
                 INNER JOIN SIFacturacion..cAdministracion s ON a.IdSede = s.IdSede
                 INNER JOIN RedMedicronIPS..GeneralesUsuario u ON d.usuarioRegistra = u.id
+                LEFT JOIN SIFacturacion..dHCOrdenesExternas oe ON d.IdAdmision = oe.IdAdmision 
+                    AND d.NumeroOrden = oe.NoOrden
                 WHERE d.IdAdmision = ? AND d.numeroEntrega = ?
                 """
                 header = cursor.execute(header_sql, (id_admision, n_entrega)).fetchone()
@@ -197,12 +200,31 @@ class DataManager:
                 medicamentos = cursor.execute(meds_sql, (id_admision, n_entrega)).fetchall()
 
                 # CONSULTA 3: Firma del Paciente
+                # firma_sql = """
+                # SELECT imagenFirma, fechaFirma, idAdmision 
+                # FROM RedMedicronIPS..DispensacionFarmaciaPGPFirmaRecibido 
+                # WHERE idAdmision = ? AND idFirma = ?
+                # """
+                # firma = cursor.execute(firma_sql, (id_admision, n_entrega)).fetchone()
+
+                # 3. Lógica de Firma con Fallback (Búsqueda de respaldo)
+                # Primero intentamos por ID de Entrega específico
                 firma_sql = """
-                SELECT imagenFirma, fechaFirma, idAdmision 
+                SELECT imagenFirma, fechaFirma 
                 FROM RedMedicronIPS..DispensacionFarmaciaPGPFirmaRecibido 
                 WHERE idAdmision = ? AND idFirma = ?
                 """
                 firma = cursor.execute(firma_sql, (id_admision, n_entrega)).fetchone()
+
+                # Si no existe, buscamos la más reciente del paciente por su documento (IdUsuario)
+                if not firma and header:
+                    fallback_sql = """
+                    SELECT TOP 1 imagenFirma, fechaFirma 
+                    FROM RedMedicronIPS..DispensacionFarmaciaPGPFirmaRecibido 
+                    WHERE idUsuario = ? 
+                    ORDER BY fechaFirma DESC
+                    """
+                    firma = cursor.execute(fallback_sql, (header.IdUsuario,)).fetchone()
 
                 return header, medicamentos, firma
                 
@@ -225,7 +247,7 @@ class DataManager:
         """Obtiene la lista de todas las sedes disponibles.
         
         Returns:
-            list: Lista de tuplas (IdSedeSI, SedeNombre).
+            list: Lista de tuplas (id, SedeNombre).
             
         Raises:
             Exception: Si hay error en la consulta.
@@ -323,7 +345,7 @@ class DataManager:
             WHERE CAST(d.fechaEntrega AS DATE) BETWEEN ? AND ? AND d.estado = 0
         ) rn
         INNER JOIN SIFacturacion..mPacientes p ON rn.IdUsuario = p.IdUsuario
-        LEFT JOIN RedMedicronIPS..GeneralesSede s ON rn.idSede = s.IdSedeSI
+        LEFT JOIN RedMedicronIPS..GeneralesSede s ON rn.idSede = s.id
         WHERE rn.rn = 1
         """ + (f" AND rn.idSede = {id_sede} " if id_sede else "") + """
         ORDER BY rn.fechaEntrega DESC
