@@ -230,7 +230,7 @@ class DataManager:
         Raises:
             Exception: Si hay error en la consulta.
         """
-        query = """SELECT IdSedeSI, SedeNombre FROM RedMedicronIPS..GeneralesSede ORDER BY SedeNombre"""
+        query = """SELECT id, SedeNombre FROM RedMedicronIPS..GeneralesSede ORDER BY SedeNombre"""
         try:
             with self._get_connection() as conn:
                 cursor = conn.cursor()
@@ -268,13 +268,13 @@ class DataManager:
                 d.fechaEntrega,
                 d.idSede,
                 a.IdUsuario,
-                ROW_NUMBER() OVER (PARTITION BY d.numeroEntrega ORDER BY d.fechaEntrega DESC, d.IdAdmision DESC) as rn
+                ROW_NUMBER() OVER (PARTITION BY d.IdAdmision, d.numeroEntrega ORDER BY d.fechaEntrega DESC) as rn
             FROM RedMedicronIPS..DispensacionFarmaciaPGP d
             INNER JOIN SIFacturacion..mAdmisiones a ON d.IdAdmision = a.IdAdmision
             WHERE a.IdUsuario = ? AND d.estado = 0
         ) rn
         INNER JOIN SIFacturacion..mPacientes p ON rn.IdUsuario = p.IdUsuario
-        LEFT JOIN RedMedicronIPS..GeneralesSede s ON rn.idSede = s.IdSedeSI
+        LEFT JOIN RedMedicronIPS..GeneralesSede s ON rn.idSede = s.id
         WHERE rn.rn = 1
         """ + (f"AND rn.idSede = {id_sede} " if id_sede else "") + """
         ORDER BY rn.fechaEntrega DESC

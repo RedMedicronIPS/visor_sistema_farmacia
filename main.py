@@ -226,6 +226,12 @@ class AppFarmacia(QMainWindow):
         """Carga la lista de sedes desde la BD."""
         try:
             self.sedes = self.db.get_sedes()
+            self.combo_sede.clear()
+            self.combo_sede.addItem("-- Todas las Sedes --", None)
+            for sede in self.sedes:
+                # sede.id ahora es la PK interna que coincide con idSede en la transacción
+                # self.combo_sede.addItem(sede.SedeNombre, sede.id)
+                self.combo_sede.addItem(sede[1], sede[0])
         except Exception as e:
             print(f"Error al cargar sedes: {str(e)}")
             self.sedes = []
@@ -324,7 +330,7 @@ class AppFarmacia(QMainWindow):
         self.combo_sede = QComboBox()
         self.combo_sede.addItem("-- Todas las Sedes --", None)
         for sede in self.sedes:
-            self.combo_sede.addItem(sede.SedeNombre, sede.IdSedeSI)
+            self.combo_sede.addItem(sede.SedeNombre, sede.id)
         sede_layout.addWidget(self.combo_sede)
         sede_layout.addStretch()
         layout.addLayout(sede_layout)
