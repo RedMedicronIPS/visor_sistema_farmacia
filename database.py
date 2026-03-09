@@ -325,7 +325,7 @@ class DataManager:
         INNER JOIN SIFacturacion..mPacientes p ON rn.IdUsuario = p.IdUsuario
         LEFT JOIN RedMedicronIPS..GeneralesSede s ON rn.idSede = s.IdSedeSI
         WHERE rn.rn = 1
-        """ + (f"AND rn.idSede = {id_sede} " if id_sede else "") + """
+        """ + (f" AND rn.idSede = {id_sede} " if id_sede else "") + """
         ORDER BY rn.fechaEntrega DESC
         """
         try:

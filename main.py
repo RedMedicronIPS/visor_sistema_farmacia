@@ -231,7 +231,7 @@ class AppFarmacia(QMainWindow):
             for sede in self.sedes:
                 # sede.id ahora es la PK interna que coincide con idSede en la transacción
                 # self.combo_sede.addItem(sede.SedeNombre, sede.id)
-                self.combo_sede.addItem(sede[1], sede[0])
+                self.combo_sede.addItem(str(sede[1]), sede[0])
         except Exception as e:
             print(f"Error al cargar sedes: {str(e)}")
             self.sedes = []

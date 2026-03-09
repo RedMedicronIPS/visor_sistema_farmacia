@@ -154,7 +154,6 @@
 
         </table>
 
-        <br>
 
         <h3>I. INFORMACIÓN DEL PACIENTE</h3>
 
@@ -188,7 +187,7 @@
             </tr>
 
         </table>
-        <br>
+
 
         <h3>II. MEDICAMENTOS ENTREGADOS</h3>
 
@@ -197,6 +196,7 @@
             <thead>
                 <tr class="bg-gray">
                     <td width="40%">MEDICAMENTO</td>
+                    <td >COD. DX</td>
                     <td>N. LOTE</td>
                     <td>N. ORDEN</td>
                     <td>FORMULADO</td>
@@ -211,6 +211,7 @@
                     <td style="text-align:left">
                         {{ m.nombre }}
                     </td>
+                    <td>{{ m.codigo_diagnostico }}</td>
                     <td>{{ m.lote }}</td>
                     <td>{{ m.orden }}</td>
                     <td>{{ m.ordenado }}</td>
@@ -221,7 +222,8 @@
             </tbody>
         </table>
 
-        <br>
+        <h3>Declaro que recibí el medicamento a satisfacción y que comprendí las indicaciones, recomendaciones y el manejo adecuado para su uso.</h3>
+    
 
         <!-- TABLA FIRMAS -->
         <table width="100%" style="border:0;">
