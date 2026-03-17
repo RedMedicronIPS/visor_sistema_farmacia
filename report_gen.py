@@ -284,9 +284,9 @@ class ReportGenerator:
                             'nombre': m.nomSuministro,
                             'lote': m.numeroLote,
                             'orden': m.NumeroOrden,
-                            'entregado': m.cantidadEntregada,
+                            'entregado': m.CantidadDeEstaEntrega,
                             'ordenado': m.CantidadFormulada,
-                            'pendiente': m.CantidadFormulada - m.cantidadEntregada
+                            'pendiente': m.CantidadFormulada - m.TotalAcumuladoEntregado
                         } for m in meds
                     ],
                     'logo1': _img_datauri(_resource_path(os.path.join('public','logoRedMedicronIPS.png'))),
@@ -338,9 +338,9 @@ class ReportGenerator:
                             'nombre': m.nomSuministro,
                             'lote': m.numeroLote,
                             'orden': m.NumeroOrden,
-                            'entregado': m.cantidadEntregada,
+                            'entregado': m.CantidadDeEstaEntrega,
                             'ordenado': m.CantidadFormulada,
-                            'pendiente': m.CantidadFormulada - m.cantidadEntregada
+                            'pendiente': m.CantidadFormulada - m.TotalAcumuladoEntregado
                         } for m in meds
                     ],
                     'firma_paciente': img_firma

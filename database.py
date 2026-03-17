@@ -184,16 +184,47 @@ class DataManager:
                     )
 
                 # CONSULTA 2: Medicamentos (Compara Entregado vs Formulado)
+                # meds_sql = """
+                # SELECT 
+                #     d.nomSuministro, 
+                #     d.numeroLote, 
+                #     d.NumeroOrden, 
+                #     d.cantidadEntregada, 
+                #     ISNULL(oe.Cantidad, 0) as CantidadFormulada
+                #  FROM RedMedicronIPS..DispensacionFarmaciaPGP d
+                # LEFT JOIN SIFacturacion..dHCOrdenesExternas oe ON d.IdAdmision = oe.IdAdmision 
+                #      AND d.NumeroOrden = oe.NoOrden AND d.codSuministro = oe.CodServicio
+                # WHERE d.IdAdmision = ? AND d.numeroEntrega = ? AND d.estado = 0
+                # ORDER BY d.nomSuministro
+                # """
+                # medicamentos = cursor.execute(meds_sql, (id_admision, n_entrega)).fetchall()
+
+                # CONSULTA 2: Medicamentos (Con lógica híbrida de acumulados)
                 meds_sql = """
                 SELECT 
                     d.nomSuministro, 
                     d.numeroLote, 
                     d.NumeroOrden, 
-                    d.cantidadEntregada, 
-                    ISNULL(oe.Cantidad, 0) as CantidadFormulada
+                    d.cantidadEntregada as CantidadDeEstaEntrega, 
+                    ISNULL(oe.Cantidad, 0) as CantidadFormulada,
+                    ISNULL(hist.TotalAcumuladoEntregado, 0) as TotalAcumuladoEntregado,
+                    d.fechaEntrega
                 FROM RedMedicronIPS..DispensacionFarmaciaPGP d
                 LEFT JOIN SIFacturacion..dHCOrdenesExternas oe ON d.IdAdmision = oe.IdAdmision 
-                     AND d.NumeroOrden = oe.NoOrden AND d.codSuministro = oe.CodServicio
+                    AND d.NumeroOrden = oe.NoOrden AND d.codSuministro = oe.CodServicio
+                OUTER APPLY (
+                    SELECT SUM(d2.cantidadEntregada) AS TotalAcumuladoEntregado -- CORRECCIÓN: Nombre unificado
+                    FROM RedMedicronIPS..dispensacionfarmaciapgp d2
+                    WHERE d2.IdAdmision = d.IdAdmision
+                    AND d2.CodSuministro = d.CodSuministro
+                    AND d2.estado = 0
+                    AND d2.fechaEntrega <= d.fechaEntrega -- Lógica de fecha histórica
+                    AND (
+                        (d2.NumeroOrden IS NOT NULL AND d2.NumeroOrden <> 0 AND d2.NumeroOrden = d.NumeroOrden)
+                        OR
+                        ((d2.NumeroOrden IS NULL OR d2.NumeroOrden = 0) AND d2.fechaEntrega >= oe.Fecha)
+                    )
+                ) hist
                 WHERE d.IdAdmision = ? AND d.numeroEntrega = ? AND d.estado = 0
                 ORDER BY d.nomSuministro
                 """

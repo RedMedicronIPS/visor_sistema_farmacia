@@ -132,6 +132,7 @@ class BulkPDFWorker(Thread):
                 estado_firma = "FIRMADO" if f else "SIN FIRMA (Pte. Manual)"
                 
                 if not h:
+                    
                     resultado = {
                         'id_usuario': id_usuario,
                         'nombre_paciente': nombre_paciente,
@@ -149,9 +150,9 @@ class BulkPDFWorker(Thread):
                                 'nombre': med.nomSuministro,
                                 'lote': med.numeroLote,
                                 'orden': med.NumeroOrden,
-                                'entregado': med.cantidadEntregada,
+                                'entregado': med.CantidadDeEstaEntrega,
                                 'ordenado': med.CantidadFormulada,
-                                'pendiente': med.CantidadFormulada - med.cantidadEntregada
+                                'pendiente': med.CantidadFormulada - med.TotalAcumuladoEntregado
                             } for med in m
                         ]
                     }
@@ -180,9 +181,9 @@ class BulkPDFWorker(Thread):
                             'nombre': med.nomSuministro,
                             'lote': med.numeroLote,
                             'orden': med.NumeroOrden,
-                            'entregado': med.cantidadEntregada,
+                            'entregado': med.CantidadDeEstaEntrega,
                             'ordenado': med.CantidadFormulada,
-                            'pendiente': med.CantidadFormulada - med.cantidadEntregada
+                            'pendiente': med.CantidadFormulada - med.TotalAcumuladoEntregado
                         } for med in m
                     ]
                 }
@@ -207,9 +208,9 @@ class BulkPDFWorker(Thread):
                             'nombre': med.nomSuministro,
                             'lote': med.numeroLote,
                             'orden': med.NumeroOrden,
-                            'entregado': med.cantidadEntregada,
+                            'entregado': med.CantidadDeEstaEntrega,
                             'ordenado': med.CantidadFormulada,
-                            'pendiente': med.CantidadFormulada - med.cantidadEntregada
+                            'pendiente': med.CantidadFormulada - med.TotalAcumuladoEntregado
                         } for med in m
                     ]
                 }
